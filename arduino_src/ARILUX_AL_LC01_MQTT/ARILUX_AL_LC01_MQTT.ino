@@ -34,7 +34,6 @@ Ticker handleFan;
 int currentPWM = 0;
 
 void setPWM(int pwm) {
-  
   if (currentPWM > pwm) {
     analogWrite(R, --currentPWM);
   } else if (currentPWM < pwm) {
@@ -82,7 +81,7 @@ void setup() {
   Serial.print("Start MQTT: ");
   Serial.println(host);
 
-  handleFan.attach_ms(100, setPWM, 255);
+  handleFan.attach_ms(50, setPWM, 255);
 }
 
 void loop() {
@@ -96,8 +95,7 @@ void loop() {
 
   //Serial.println(currentPWM);
   mqtt.publish("/"+nodeName+"/currentPWM", String(currentPWM));
-  if (currentPWM >= 255) handleFan.attach_ms(100, setPWM, 0);
-  if (currentPWM <= 0) handleFan.attach_ms(100, setPWM, 255);
+
   delay(1000);
 }
 
@@ -115,7 +113,8 @@ void connect() {
     delay(1000);
   }
   Serial.println("\nconnected!");
-
+  mqtt.subscribe("/"+nodeName+"/targetPWM");
+  
   mqtt.publish("/"+nodeName+"/ip", String(WiFi.localIP()[0]) + "." + String(WiFi.localIP()[1]) + "." + String(WiFi.localIP()[2]) + "." + String(WiFi.localIP()[3]));
 }
 
@@ -145,8 +144,6 @@ void saveConfigCallback () {
 
 void saveConfig() {
   if (shouldSaveConfig) {
-
-
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
@@ -278,5 +275,9 @@ void messageReceived(String topic, String payload, char * bytes, unsigned int le
   Serial.print(" - ");
   Serial.print(payload);
   Serial.println();
+
+  int value = payload.toInt();
+
+  if (topic == "/"+nodeName+"/targetPWM") handleFan.attach_ms(50, setPWM, value);
 }
 
