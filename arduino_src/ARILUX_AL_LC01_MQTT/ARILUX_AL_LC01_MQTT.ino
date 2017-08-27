@@ -10,13 +10,15 @@
 #include <ArduinoJson.h>
 #include <Ticker.h>
 
+#define WM_TIMEOUT 120
 //define the pinout, equaals the labels used on the board.
-#define OUT D5 //pad is connected by resistor to the pin on the chip
+#define OUT 4 //pad is connected by resistor to the pin on the chip
 #define SEL D0
-#define R D4
-#define G D14
-#define B D12
-#define W D13
+#define R 5
+#define G 14
+#define B 12
+#define W 13
+
 
 File configFile;
 char host[40] = "broker.shiftr.io";
@@ -35,9 +37,17 @@ int currentPWM = 0;
 
 void setPWM(int pwm) {
   if (currentPWM > pwm) {
-    analogWrite(R, --currentPWM);
+    --currentPWM;
+    analogWrite(W, currentPWM);
+    analogWrite(R, currentPWM);
+    analogWrite(G, currentPWM);
+    analogWrite(B, currentPWM);
   } else if (currentPWM < pwm) {
-    analogWrite(R, ++currentPWM);
+    ++currentPWM;
+    analogWrite(W, currentPWM);
+    analogWrite(R, currentPWM);
+    analogWrite(G, currentPWM);
+    analogWrite(B, currentPWM);
   } else {
     handleFan.detach();
   }
@@ -58,7 +68,7 @@ void setup() {
   Serial.print("Start MQTT: ");
   Serial.println(host);
 
-  handleFan.attach_ms(50, setPWM, 255);
+  handleFan.attach_ms(30, setPWM, 255);
 }
 
 void loop() {
@@ -191,7 +201,7 @@ void useWifiManager() {
   WiFiManagerParameter custom_mqtt_clientID("clientID", "mqtt clientID", clientID, 40);
   //Local intialization. Once its business is done, there is no need to keep it around
   WiFiManager wifiManager;
-  wifiManager.setTimeout(120);
+  wifiManager.setTimeout(WM_TIMEOUT);
 
   //reset settings - for testing
   //wifiManager.resetSettings();
