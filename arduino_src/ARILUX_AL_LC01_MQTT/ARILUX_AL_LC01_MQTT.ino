@@ -9,7 +9,7 @@
 #include <ArduinoJson.h>
 #include <Ticker.h>
 
-#define WM_TIMEOUT 120
+#define WM_TIMEOUT 10
 #define tickerCycleTime 30
 //define the pinout, equaals the labels used on the board.
 #define OUT 4 //pad is connected by resistor to the pin on the chip
@@ -31,32 +31,44 @@ bool shouldSaveConfig = false;
 WiFiClient wifi;
 MQTTClient mqtt;
 
-Ticker handleFan;
+Ticker handleFan0;
+Ticker handleFan1;
+Ticker handleFan2;
+Ticker handleFan3;
 
 //pin order in my case B, R, W, G
-uint8_t pins[4] = {B, R, W, G};
-uint8_t currentPWM[4] = {0, 0, 0, 0};
-uint8_t targetPWM[4] = {0, 0, 0, 0};
+uint8_t pins[4] = {12, 5, 13, 14};
+int currentPWM[4] = {0, 0, 0, 0};
+int targetPWM[4] = {0, 0, 0, 0};
 
-void setPWM(uint8_t pin) {
+void setPWM(int pin) {
   if (currentPWM[pin] > targetPWM[pin]) {
     --currentPWM[pin];
-    analogWrite(pin, currentPWM[pin]);
+    analogWrite(pins[pin], currentPWM[pin]);
   } else if (currentPWM[pin] < targetPWM[pin]) {
     ++currentPWM[pin];
-    analogWrite(pin, currentPWM[pin]);
+    analogWrite(pins[pin], currentPWM[pin]);
   } else {
-    handleFan.detach();
+    if (pin == 0) handleFan0.detach();
+    else if (pin == 1) handleFan1.detach();
+    else if (pin == 2) handleFan2.detach();
+    else if (pin == 3) handleFan3.detach();
   }
 }
 
-void delayed(uint8_t pin) {
-  handleFan.attach_ms(tickerCycleTime, setPWM, pin);
+
+void delayed(int pin) {
+  if (pin == 0) handleFan0.attach_ms(tickerCycleTime, setPWM, pin);
+    else if (pin == 1) handleFan1.attach_ms(tickerCycleTime, setPWM, pin);
+    else if (pin == 2) handleFan2.attach_ms(tickerCycleTime, setPWM, pin);
+    else if (pin == 3) handleFan3.attach_ms(tickerCycleTime, setPWM, pin);
+  
 }
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Booting");
+  Serial.println();
+  Serial.println("Booting...");
   loadConfig();
   useWifiManager();
   saveConfig();
@@ -97,13 +109,14 @@ void connect() {
     delay(1000);
   }
   Serial.println("\nconnected!");
-  mqtt.subscribe("/"+nodeName+"/targetPWM");
+  mqtt.subscribe("/"+nodeName+"/fan/#");
   
   mqtt.publish("/"+nodeName+"/ip", String(WiFi.localIP()[0]) + "." + String(WiFi.localIP()[1]) + "." + String(WiFi.localIP()[2]) + "." + String(WiFi.localIP()[3]));
 }
 
 void connectWifi() {
-  Serial.print("checking wifi...");
+  Serial.print("checking wifi... ");
+  Serial.print(WiFi.SSID());
 
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
@@ -260,12 +273,31 @@ void messageReceived(String topic, String payload, char * bytes, unsigned int le
   Serial.print(payload);
   Serial.println();
 
-  targetPWM[0] = (uint8_t)payload.toInt();
-  if (topic == "/"+nodeName+"/targetPWM") {
-    handleFan.attach_ms(tickerCycleTime, setPWM, pins[0]);
-    handleFan.once_ms(1000, setPWM, pins[0]);
-    handleFan.once_ms(2000, setPWM, pins[0]);
-    handleFan.once_ms(3000, setPWM, pins[0]);
+  if (topic == "/"+nodeName+"/fan/all") {
+    int value = payload.toInt();
+    for (int i = 0; i <= 3; i++) {
+      targetPWM[i] = value;
+    }
+    handleFan0.attach_ms(tickerCycleTime, setPWM, 0);
+    delay(10);
+    handleFan1.once_ms(1000, delayed, 1);
+    delay(10);
+    handleFan2.once_ms(2000, delayed, 2);
+    delay(10);
+    handleFan3.once_ms(3000, delayed, 3);
+  } else if (topic == "/"+nodeName+"/fan/0") {
+    targetPWM[0] = payload.toInt();
+    handleFan0.attach_ms(tickerCycleTime, setPWM, 0);
+  } else if (topic == "/"+nodeName+"/fan/1") {
+    targetPWM[1] = payload.toInt();
+    handleFan1.attach_ms(tickerCycleTime, setPWM, 1);
+  } else if (topic == "/"+nodeName+"/fan/2") {
+    targetPWM[2] = payload.toInt();
+    handleFan2.attach_ms(tickerCycleTime, setPWM, 2);
+  } else if (topic == "/"+nodeName+"/fan/3") {
+    targetPWM[3] = payload.toInt();
+    handleFan3.attach_ms(tickerCycleTime, setPWM, 3);
   }
+  
 }
 
