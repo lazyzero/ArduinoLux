@@ -9,7 +9,7 @@
 #include <ArduinoJson.h>
 #include <Ticker.h>
 
-#define WM_TIMEOUT 10
+#define WM_TIMEOUT 120
 #define tickerCycleTime 30
 //define the pinout, equaals the labels used on the board.
 #define OUT 4 //pad is connected by resistor to the pin on the chip
@@ -72,6 +72,8 @@ void setup() {
   loadConfig();
   useWifiManager();
   saveConfig();
+  analogWriteFreq(16000);
+  analogWriteRange(100);
 
   nodeName=clientID;
 
