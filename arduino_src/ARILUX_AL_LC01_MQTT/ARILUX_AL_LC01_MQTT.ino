@@ -1,7 +1,6 @@
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
 #include <ESP8266mDNS.h>
 #include <WiFiUdp.h>
-#include <ArduinoOTA.h>
 #include <DNSServer.h>
 #include <MQTTClient.h>
 #include "WiFiManager.h"          //https://github.com/tzapu/WiFiManager
@@ -11,6 +10,7 @@
 #include <Ticker.h>
 
 #define WM_TIMEOUT 120
+#define tickerCycleTime 30
 //define the pinout, equaals the labels used on the board.
 #define OUT 4 //pad is connected by resistor to the pin on the chip
 #define SEL D0
@@ -18,7 +18,6 @@
 #define G 14
 #define B 12
 #define W 13
-
 
 File configFile;
 char host[40] = "broker.shiftr.io";
@@ -33,24 +32,26 @@ WiFiClient wifi;
 MQTTClient mqtt;
 
 Ticker handleFan;
-int currentPWM = 0;
 
-void setPWM(int pwm) {
-  if (currentPWM > pwm) {
-    --currentPWM;
-    analogWrite(W, currentPWM);
-    analogWrite(R, currentPWM);
-    analogWrite(G, currentPWM);
-    analogWrite(B, currentPWM);
-  } else if (currentPWM < pwm) {
-    ++currentPWM;
-    analogWrite(W, currentPWM);
-    analogWrite(R, currentPWM);
-    analogWrite(G, currentPWM);
-    analogWrite(B, currentPWM);
+//pin order in my case B, R, W, G
+uint8_t pins[4] = {B, R, W, G};
+uint8_t currentPWM[4] = {0, 0, 0, 0};
+uint8_t targetPWM[4] = {0, 0, 0, 0};
+
+void setPWM(uint8_t pin) {
+  if (currentPWM[pin] > targetPWM[pin]) {
+    --currentPWM[pin];
+    analogWrite(pin, currentPWM[pin]);
+  } else if (currentPWM[pin] < targetPWM[pin]) {
+    ++currentPWM[pin];
+    analogWrite(pin, currentPWM[pin]);
   } else {
     handleFan.detach();
   }
+}
+
+void delayed(uint8_t pin) {
+  handleFan.attach_ms(tickerCycleTime, setPWM, pin);
 }
 
 void setup() {
@@ -68,7 +69,6 @@ void setup() {
   Serial.print("Start MQTT: ");
   Serial.println(host);
 
-  handleFan.attach_ms(30, setPWM, 255);
 }
 
 void loop() {
@@ -78,7 +78,7 @@ void loop() {
     connect();
   }
 
-  mqtt.publish("/"+nodeName+"/currentPWM", String(currentPWM));
+  mqtt.publish("/"+nodeName+"/currentPWM", String(currentPWM[0]));
 
   delay(1000);
 }
@@ -260,8 +260,12 @@ void messageReceived(String topic, String payload, char * bytes, unsigned int le
   Serial.print(payload);
   Serial.println();
 
-  int value = payload.toInt();
-
-  if (topic == "/"+nodeName+"/targetPWM") handleFan.attach_ms(50, setPWM, value);
+  targetPWM[0] = (uint8_t)payload.toInt();
+  if (topic == "/"+nodeName+"/targetPWM") {
+    handleFan.attach_ms(tickerCycleTime, setPWM, pins[0]);
+    handleFan.once_ms(1000, setPWM, pins[0]);
+    handleFan.once_ms(2000, setPWM, pins[0]);
+    handleFan.once_ms(3000, setPWM, pins[0]);
+  }
 }
 
